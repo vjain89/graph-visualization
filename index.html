@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graph Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: white;
+            overflow: hidden;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #ccc;
+        }
+        
+        input, select, button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 5px;
+            background: #333;
+            color: white;
+            font-size: 14px;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #4a90e2;
+        }
+        
+        button {
+            background: #4a90e2;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #357abd;
+        }
+        
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 300px;
+            display: none;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        
+        .info-item {
+            margin-bottom: 10px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            color: #4a90e2;
+            display: inline-block;
+            width: 80px;
+        }
+        
+        .info-value {
+            color: #fff;
+        }
+        
+        #cy {
+            width: 100vw;
+            height: 100vh;
+            background: #1a1a1a;
+        }
+        
+        .zoom-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #ccc;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div class="control-group">
+            <label for="zoom-slider">Zoom Level:</label>
+            <input type="range" id="zoom-slider" min="0" max="100" value="50">
+        </div>
+                    <div class="control-group">
+                <label for="layout-selector">Layout:</label>
+                <select id="layout-selector">
+                    <option value="layout">Data Center Layout</option>
+                </select>
+            </div>
+
+            <button id="regenerate">Load Layout</button>
+    </div>
+    
+    <div id="info-panel">
+        <div id="info-content"></div>
+    </div>
+    
+    <div class="zoom-info">
+        <div>Zoom: <span id="zoom-text">Medium</span></div>
+        <div>View: <span id="view-text">Objects + Connections</span></div>
+    </div>
+    
+    <div id="cy"></div>
+    
+            <script src="graph.js?v=6"></script>
+</body>
+</html> 

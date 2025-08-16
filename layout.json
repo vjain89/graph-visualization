@@ -1,0 +1,128 @@
+{
+  "name": "Simple Data Center",
+  "description": "A simple data center with basic connections",
+  "objects": [
+    {
+      "id": "router_1",
+      "type": "router",
+      "x": 100,
+      "y": 300
+    },
+    {
+      "id": "cpu_1",
+      "type": "processor",
+      "x": 400,
+      "y": 200
+    },
+    {
+      "id": "cpu_2",
+      "type": "processor",
+      "x": 400,
+      "y": 400
+    },
+    {
+      "id": "gpu_1",
+      "type": "compute",
+      "x": 700,
+      "y": 200
+    },
+    {
+      "id": "gpu_2",
+      "type": "compute",
+      "x": 700,
+      "y": 400
+    },
+    {
+      "id": "storage_1",
+      "type": "storage",
+      "x": 1000,
+      "y": 200
+    },
+    {
+      "id": "storage_2",
+      "type": "storage",
+      "x": 1000,
+      "y": 400
+    },
+    {
+      "id": "network_1",
+      "type": "network",
+      "x": 1300,
+      "y": 300
+    }
+  ],
+  "connections": [
+    {
+      "id": "router_to_cpu1",
+      "from": {"object": "router_1", "output": "port_3"},
+      "to": {"object": "cpu_1", "input": "data_in"},
+      "type": "pcie",
+      "linkType": "simple",
+      "length": 150,
+      "latency": 1.0
+    },
+    {
+      "id": "router_to_cpu2",
+      "from": {"object": "router_1", "output": "port_4"},
+      "to": {"object": "cpu_2", "input": "data_in"},
+      "type": "pcie",
+      "linkType": "repeater",
+      "length": 200,
+      "latency": 1.5
+    },
+    {
+      "id": "cpu1_to_gpu1",
+      "from": {"object": "cpu_1", "output": "data_out"},
+      "to": {"object": "gpu_1", "input": "pcie_in"},
+      "type": "pcie",
+      "linkType": "simple",
+      "length": 100,
+      "latency": 1.0
+    },
+    {
+      "id": "cpu2_to_gpu2",
+      "from": {"object": "cpu_2", "output": "data_out"},
+      "to": {"object": "gpu_2", "input": "pcie_in"},
+      "type": "pcie",
+      "linkType": "amplifier",
+      "length": 120,
+      "latency": 2.0
+    },
+    {
+      "id": "gpu1_to_storage1",
+      "from": {"object": "gpu_1", "output": "pcie_out"},
+      "to": {"object": "storage_1", "input": "data_in"},
+      "type": "sata",
+      "linkType": "simple",
+      "length": 250,
+      "latency": 8.0
+    },
+    {
+      "id": "gpu2_to_storage2",
+      "from": {"object": "gpu_2", "output": "pcie_out"},
+      "to": {"object": "storage_2", "input": "data_in"},
+      "type": "sata",
+      "linkType": "simple",
+      "length": 280,
+      "latency": 8.0
+    },
+    {
+      "id": "storage1_to_network",
+      "from": {"object": "storage_1", "output": "data_out"},
+      "to": {"object": "network_1", "input": "port_a"},
+      "type": "ethernet",
+      "linkType": "repeater",
+      "length": 100,
+      "latency": 5.0
+    },
+    {
+      "id": "storage2_to_network",
+      "from": {"object": "storage_2", "output": "data_out"},
+      "to": {"object": "network_1", "input": "port_a"},
+      "type": "ethernet",
+      "linkType": "repeater",
+      "length": 180,
+      "latency": 5.0
+    }
+  ]
+} 

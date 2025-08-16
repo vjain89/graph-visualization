@@ -1,0 +1,52 @@
+{
+  "connectionTypes": {
+    "ethernet": {
+      "name": "Ethernet",
+      "color": "#3498db",
+      "lineWidth": 2
+    },
+    "fiber": {
+      "name": "Fiber Optic",
+      "color": "#e74c3c",
+      "lineWidth": 3
+    },
+    "pcie": {
+      "name": "PCIe",
+      "color": "#2ecc71",
+      "lineWidth": 3
+    },
+    "sata": {
+      "name": "SATA",
+      "color": "#95a5a6",
+      "lineWidth": 2
+    }
+  },
+  "linkTypes": {
+    "simple": {
+      "name": "Simple Link",
+      "nodes": []
+    },
+    "repeater": {
+      "name": "Repeater Link",
+      "nodes": [
+        {
+          "id": "repeater",
+          "name": "Repeater",
+          "position": 0.5,
+          "color": "#f39c12"
+        }
+      ]
+    },
+    "amplifier": {
+      "name": "Amplifier Link",
+      "nodes": [
+        {
+          "id": "amplifier",
+          "name": "Amplifier",
+          "position": 0.5,
+          "color": "#9b59b6"
+        }
+      ]
+    }
+  }
+} 

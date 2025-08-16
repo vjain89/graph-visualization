@@ -1,0 +1,152 @@
+{
+  "objectTypes": {
+    "processor": {
+      "name": "Processor",
+      "color": "#4a90e2",
+      "width": 120,
+      "height": 80,
+      "inputs": [
+        {
+          "id": "data_in",
+          "name": "Data Input",
+          "x": 0,
+          "y": 30,
+          "color": "#3498db"
+        },
+        {
+          "id": "control_in",
+          "name": "Control Input",
+          "x": 0,
+          "y": 50,
+          "color": "#3498db"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "data_out",
+          "name": "Data Output",
+          "x": 120,
+          "y": 30,
+          "color": "#e74c3c"
+        },
+        {
+          "id": "status_out",
+          "name": "Status Output",
+          "x": 120,
+          "y": 50,
+          "color": "#e74c3c"
+        }
+      ]
+    },
+    "router": {
+      "name": "Router",
+      "color": "#50c878",
+      "width": 100,
+      "height": 60,
+      "inputs": [
+        {
+          "id": "port_1",
+          "name": "Port 1",
+          "x": 0,
+          "y": 20,
+          "color": "#3498db"
+        },
+        {
+          "id": "port_2",
+          "name": "Port 2",
+          "x": 0,
+          "y": 40,
+          "color": "#3498db"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "port_3",
+          "name": "Port 3",
+          "x": 100,
+          "y": 20,
+          "color": "#e74c3c"
+        },
+        {
+          "id": "port_4",
+          "name": "Port 4",
+          "x": 100,
+          "y": 40,
+          "color": "#e74c3c"
+        }
+      ]
+    },
+    "storage": {
+      "name": "Storage",
+      "color": "#f39c12",
+      "width": 100,
+      "height": 60,
+      "inputs": [
+        {
+          "id": "data_in",
+          "name": "Data Input",
+          "x": 0,
+          "y": 30,
+          "color": "#3498db"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "data_out",
+          "name": "Data Output",
+          "x": 100,
+          "y": 30,
+          "color": "#e74c3c"
+        }
+      ]
+    },
+    "compute": {
+      "name": "Compute",
+      "color": "#e74c3c",
+      "width": 100,
+      "height": 60,
+      "inputs": [
+        {
+          "id": "pcie_in",
+          "name": "PCIe Input",
+          "x": 0,
+          "y": 30,
+          "color": "#3498db"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "pcie_out",
+          "name": "PCIe Output",
+          "x": 100,
+          "y": 30,
+          "color": "#e74c3c"
+        }
+      ]
+    },
+    "network": {
+      "name": "Network",
+      "color": "#9b59b6",
+      "width": 100,
+      "height": 60,
+      "inputs": [
+        {
+          "id": "port_a",
+          "name": "Port A",
+          "x": 0,
+          "y": 30,
+          "color": "#3498db"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "port_b",
+          "name": "Port B",
+          "x": 100,
+          "y": 30,
+          "color": "#e74c3c"
+        }
+      ]
+    }
+  }
+} 
