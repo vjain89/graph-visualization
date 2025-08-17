@@ -5,6 +5,9 @@ class GraphVisualization {
         this.connectionTypes = {};
         this.linkTypes = {};
         this.layout = null;
+        this.simpleGraph = null;
+        this.currentMode = 'layout';
+        this.latticeType = 'square';
         
         this.setupEventListeners();
         this.loadData().then(() => {
@@ -15,23 +18,23 @@ class GraphVisualization {
     
     async loadData() {
         try {
-            const [objectsResponse, connectionsResponse, layoutResponse] = await Promise.all([
+            const [objectsResponse, connectionsResponse, layoutResponse, simpleGraphResponse] = await Promise.all([
                 fetch('objects.json?v=1'),
                 fetch('connections.json?v=1'),
-                fetch('layout.json?v=1')
+                fetch('layout.json?v=1'),
+                fetch('graph-input.json')
             ]);
             
             const objectsData = await objectsResponse.json();
             const connectionsData = await connectionsResponse.json();
             const layoutData = await layoutResponse.json();
-            
-            console.log('Loaded layout data:', layoutData);
-            console.log('Connections with lengths:', layoutData.connections.map(c => ({id: c.id, length: c.length})));
+            const simpleGraphData = await simpleGraphResponse.json();
             
             this.objectTypes = objectsData.objectTypes;
             this.connectionTypes = connectionsData.connectionTypes;
             this.linkTypes = connectionsData.linkTypes;
             this.layout = layoutData;
+            this.simpleGraph = simpleGraphData;
         } catch (error) {
             console.error('Error loading JSON data:', error);
         }
@@ -48,11 +51,20 @@ class GraphVisualization {
             }
             this.updateZoomText();
         });
-        
 
-        
+        document.getElementById('layout-selector').addEventListener('change', (e) => {
+            this.currentMode = e.target.value;
+            this.initializeCytoscape();
+        });
+
+        document.getElementById('lattice-selector').addEventListener('change', (e) => {
+            this.latticeType = e.target.value;
+            if (this.currentMode === 'simple') {
+                this.initializeCytoscape();
+            }
+        });
+
         document.getElementById('regenerate').addEventListener('click', () => {
-            this.loadLayout();
             this.initializeCytoscape();
         });
     }
@@ -68,30 +80,35 @@ class GraphVisualization {
         if (this.cy) {
             this.cy.destroy();
         }
-        
-        const elements = this.createCytoscapeElements();
-        console.log('Created elements:', elements);
-        
-        this.cy = cytoscape({
-            container: document.getElementById('cy'),
-            elements: elements,
-            style: this.getCytoscapeStyle(),
-            layout: {
+        let elements, layoutConfig;
+        if (this.currentMode === 'simple') {
+            elements = this.createSimpleGraphElements();
+            layoutConfig = {
+                name: 'preset',
+                positions: this.getSimpleNodePositions(),
+                fit: true,
+                padding: 50
+            };
+        } else {
+            elements = this.createCytoscapeElements();
+            layoutConfig = {
                 name: 'preset',
                 positions: this.getNodePositions(),
                 fit: false,
                 padding: 50
-            },
+            };
+        }
+        this.cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements: elements,
+            style: this.getCytoscapeStyle(),
+            layout: layoutConfig,
             wheelSensitivity: 0.3,
             minZoom: 0.1,
             maxZoom: 3
         });
-        
-        console.log('Cytoscape initialized');
         this.setupCytoscapeEvents();
         this.updateZoomText();
-        
-        // Force initial edge scaling
         setTimeout(() => {
             this.updateEdgeScaling();
         }, 100);
@@ -159,11 +176,103 @@ class GraphVisualization {
         
         return elements;
     }
+
+    createSimpleGraphElements() {
+        if (!this.simpleGraph) return [];
+        const elements = [];
+        for (const node of this.simpleGraph.nodes) {
+            elements.push({
+                group: 'nodes',
+                data: {
+                    id: node.id,
+                    label: node.label || node.id,
+                    color: '#4a90e2',
+                    width: 40,
+                    height: 40
+                }
+            });
+        }
+        for (const edge of this.simpleGraph.edges) {
+            elements.push({
+                group: 'edges',
+                data: {
+                    id: `${edge.source}-${edge.target}`,
+                    source: edge.source,
+                    target: edge.target,
+                    color: '#aaa',
+                    lineWidth: 3
+                }
+            });
+        }
+        return elements;
+    }
     
     getNodePositions() {
+        if (this.currentMode === 'simple') return {};
         const positions = {};
         for (const obj of this.layout.objects) {
             positions[obj.id] = { x: obj.x, y: obj.y };
+        }
+        return positions;
+    }
+
+    getSimpleNodePositions() {
+        if (!this.simpleGraph) return {};
+        const positions = {};
+        const n = this.simpleGraph.nodes.length;
+        if (this.latticeType === 'square' || this.latticeType === 'rectangular') {
+            // Arrange nodes in a square/rectangular grid
+            const cols = Math.ceil(Math.sqrt(n));
+            const rows = Math.ceil(n / cols);
+            const spacingX = 120;
+            const spacingY = 120;
+            for (let i = 0; i < n; ++i) {
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+                positions[this.simpleGraph.nodes[i].id] = {
+                    x: 100 + col * spacingX,
+                    y: 100 + row * spacingY
+                };
+            }
+        } else if (this.latticeType === 'hexagonal') {
+            // Arrange nodes in a hexagonal grid
+            const cols = Math.ceil(Math.sqrt(n));
+            const spacingX = 120;
+            const spacingY = 104; // 0.866 * spacingX
+            for (let i = 0; i < n; ++i) {
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+                positions[this.simpleGraph.nodes[i].id] = {
+                    x: 100 + col * spacingX + (row % 2) * (spacingX / 2),
+                    y: 100 + row * spacingY
+                };
+            }
+        } else if (this.latticeType === 'oblique') {
+            // Arrange nodes in a parallelogram (oblique lattice)
+            const cols = Math.ceil(Math.sqrt(n));
+            const spacingX = 120;
+            const spacingY = 120;
+            const skew = 40;
+            for (let i = 0; i < n; ++i) {
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+                positions[this.simpleGraph.nodes[i].id] = {
+                    x: 100 + col * spacingX + row * skew,
+                    y: 100 + row * spacingY
+                };
+            }
+        } else if (this.latticeType === 'rhombic') {
+            // Arrange nodes in a rhombic grid
+            const cols = Math.ceil(Math.sqrt(n));
+            const spacing = 120;
+            for (let i = 0; i < n; ++i) {
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+                positions[this.simpleGraph.nodes[i].id] = {
+                    x: 100 + (col + row) * (spacing / 2),
+                    y: 100 + (row - col) * (spacing / 2)
+                };
+            }
         }
         return positions;
     }
@@ -173,47 +282,47 @@ class GraphVisualization {
             {
                 selector: 'node',
                 style: {
-                    'background-color': 'data(color)',
+                    'background-color': '#fff',
+                    'border-color': '#4a90e2',
+                    'border-width': 3,
+                    'shape': 'ellipse',
+                    'width': 40,
+                    'height': 40,
                     'label': 'data(label)',
-                    'color': '#fff',
-                    'font-size': '12px',
+                    'color': '#222',
+                    'font-size': '14px',
                     'font-weight': 'bold',
                     'text-valign': 'center',
                     'text-halign': 'center',
-                    'width': 'data(width)',
-                    'height': 'data(height)',
-                    'border-width': 2,
-                    'border-color': '#fff',
-                    'border-opacity': 0.8,
-                    'shape': 'rectangle'
+                    'text-outline-width': 2,
+                    'text-outline-color': '#fff'
                 }
             },
             {
                 selector: 'edge',
                 style: {
-                    'width': 'data(lineWidth)',
-                    'line-color': 'data(color)',
-                    'curve-style': 'segments',
-                    'segment-weights': [0.2, 0.6, 0.2],
-                    'target-arrow-color': 'data(color)',
+                    'width': 2,
+                    'line-color': '#4a90e2',
+                    'curve-style': 'bezier',
+                    'target-arrow-color': '#4a90e2',
                     'target-arrow-shape': 'triangle',
-                    'arrow-scale': 1.5,
-                    'opacity': 0.8
+                    'arrow-scale': 1.2,
+                    'opacity': 0.9
                 }
             },
             {
                 selector: 'node:selected',
                 style: {
-                    'border-width': 4,
-                    'border-color': '#4a90e2'
+                    'border-width': 5,
+                    'border-color': '#357abd'
                 }
             },
             {
                 selector: 'edge:selected',
                 style: {
-                    'width': 'data(lineWidth)',
-                    'line-color': '#4a90e2',
-                    'target-arrow-color': '#4a90e2'
+                    'width': 4,
+                    'line-color': '#357abd',
+                    'target-arrow-color': '#357abd'
                 }
             }
         ];
@@ -341,20 +450,21 @@ class GraphVisualization {
     
     updateEdgeScaling() {
         if (!this.cy) {
-            console.log('Cytoscape not initialized');
             return;
         }
-        
-        console.log('Updating edge scaling to show actual lengths');
-        
-        // Scale edge widths based on actual lengths
-        this.cy.elements('edge').forEach(edge => {
-            const edgeData = edge.data();
-            const length = edgeData.length || 100;
-            const scaledWidth = Math.max(1, edgeData.lineWidth * (length / 200));
-            edge.data('weight', length / 100);
-            edge.style('width', scaledWidth);
-        });
+        if (this.currentMode === 'simple') {
+            this.cy.elements('edge').forEach(edge => {
+                edge.style('width', 3);
+            });
+        } else {
+            this.cy.elements('edge').forEach(edge => {
+                const edgeData = edge.data();
+                const length = edgeData.length || 100;
+                const scaledWidth = Math.max(1, edgeData.lineWidth * (length / 200));
+                edge.data('weight', length / 100);
+                edge.style('width', scaledWidth);
+            });
+        }
     }
 }
 

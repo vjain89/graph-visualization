@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    { "id": "A", "label": "Node A" },
+    { "id": "B", "label": "Node B" },
+    { "id": "C", "label": "Node C" },
+    { "id": "D", "label": "Node D" },
+    { "id": "E", "label": "Node E" },
+    { "id": "F", "label": "Node F" },
+    { "id": "G", "label": "Node G" },
+    { "id": "H", "label": "Node H" }
+  ],
+  "edges": [
+    { "source": "A", "target": "B" },
+    { "source": "B", "target": "C" },
+    { "source": "C", "target": "D" },
+    { "source": "C", "target": "E" },
+    { "source": "E", "target": "F" },
+    { "source": "F", "target": "G" },
+    { "source": "E", "target": "H" },
+    { "source": "H", "target": "G" }
+  ]
+} 
