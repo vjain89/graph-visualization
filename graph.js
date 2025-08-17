@@ -6,34 +6,18 @@ class GraphVisualization {
         this.linkTypes = {};
         this.layout = null;
         this.simpleGraph = null;
-        this.currentMode = 'layout';
+        // Only use simple mode
         this.latticeType = 'square';
-        
         this.setupEventListeners();
         this.loadData().then(() => {
-            this.loadLayout();
             this.initializeCytoscape();
         });
     }
     
     async loadData() {
         try {
-            const [objectsResponse, connectionsResponse, layoutResponse, simpleGraphResponse] = await Promise.all([
-                fetch('objects.json?v=1'),
-                fetch('connections.json?v=1'),
-                fetch('layout.json?v=1'),
-                fetch('graph-input.json')
-            ]);
-            
-            const objectsData = await objectsResponse.json();
-            const connectionsData = await connectionsResponse.json();
-            const layoutData = await layoutResponse.json();
+            const simpleGraphResponse = await fetch('graph-input.json');
             const simpleGraphData = await simpleGraphResponse.json();
-            
-            this.objectTypes = objectsData.objectTypes;
-            this.connectionTypes = connectionsData.connectionTypes;
-            this.linkTypes = connectionsData.linkTypes;
-            this.layout = layoutData;
             this.simpleGraph = simpleGraphData;
         } catch (error) {
             console.error('Error loading JSON data:', error);
@@ -51,19 +35,10 @@ class GraphVisualization {
             }
             this.updateZoomText();
         });
-
-        document.getElementById('layout-selector').addEventListener('change', (e) => {
-            this.currentMode = e.target.value;
-            this.initializeCytoscape();
-        });
-
         document.getElementById('lattice-selector').addEventListener('change', (e) => {
             this.latticeType = e.target.value;
-            if (this.currentMode === 'simple') {
-                this.initializeCytoscape();
-            }
+            this.initializeCytoscape();
         });
-
         document.getElementById('regenerate').addEventListener('click', () => {
             this.initializeCytoscape();
         });
@@ -80,24 +55,13 @@ class GraphVisualization {
         if (this.cy) {
             this.cy.destroy();
         }
-        let elements, layoutConfig;
-        if (this.currentMode === 'simple') {
-            elements = this.createSimpleGraphElements();
-            layoutConfig = {
-                name: 'preset',
-                positions: this.getSimpleNodePositions(),
-                fit: true,
-                padding: 50
-            };
-        } else {
-            elements = this.createCytoscapeElements();
-            layoutConfig = {
-                name: 'preset',
-                positions: this.getNodePositions(),
-                fit: false,
-                padding: 50
-            };
-        }
+        const elements = this.createSimpleGraphElements();
+        const layoutConfig = {
+            name: 'preset',
+            positions: this.getSimpleNodePositions(),
+            fit: true,
+            padding: 50
+        };
         this.cy = cytoscape({
             container: document.getElementById('cy'),
             elements: elements,
@@ -106,6 +70,17 @@ class GraphVisualization {
             wheelSensitivity: 0.3,
             minZoom: 0.1,
             maxZoom: 3
+        });
+        // Highlight negative-x edges in simple mode
+        const positions = this.getSimpleNodePositions();
+        this.cy.edges().forEach(edge => {
+            const data = edge.data();
+            const sx = positions[data.source]?.x;
+            const tx = positions[data.target]?.x;
+            if (sx !== undefined && tx !== undefined && tx < sx) {
+                edge.style('line-color', '#e74c3c'); // red
+                edge.style('target-arrow-color', '#e74c3c');
+            }
         });
         this.setupCytoscapeEvents();
         this.updateZoomText();
@@ -211,7 +186,9 @@ class GraphVisualization {
                     source: edge.source,
                     target: edge.target,
                     color: '#aaa',
-                    lineWidth: 3
+                    lineWidth: 3,
+                    type: edge.type || '', // <-- add type from JSON
+                    length: edge.length !== undefined ? edge.length : '' // <-- add length from JSON
                 }
             });
         }
@@ -230,8 +207,8 @@ class GraphVisualization {
     getSimpleNodePositions() {
         if (!this.simpleGraph) return {};
         const positions = {};
-        const spacingX = 120;
-        const spacingY = 120;
+        // Use edge length for spacing
+        const defaultSpacing = 120;
         // Map node id to branch index for quick lookup
         const nodeToBranch = {};
         if (this.simpleGraph.branches) {
@@ -253,25 +230,36 @@ class GraphVisualization {
                     // Find incoming edge from a node in a previous branch
                     const incoming = (this.simpleGraph.edges || []).find(e => e.target === entryNode.id && nodeToBranch[e.source] !== undefined && nodeToBranch[e.source] < b);
                     if (incoming && positions[incoming.source]) {
-                        xOffset = positions[incoming.source].x + spacingX;
+                        xOffset = positions[incoming.source].x + (incoming.length || defaultSpacing);
                     }
                 }
                 for (let n = 0; n < branch.nodes.length; ++n) {
                     const node = branch.nodes[n];
-                    positions[node.id] = {
-                        x: xOffset + n * spacingX,
-                        y: 100 + b * spacingY
-                    };
+                    if (n === 0) {
+                        positions[node.id] = {
+                            x: xOffset,
+                            y: 100 + b * defaultSpacing
+                        };
+                    } else {
+                        // Find the edge from previous node to this node in the branch
+                        const prevNode = branch.nodes[n - 1];
+                        const edge = (this.simpleGraph.edges || []).find(e => e.source === prevNode.id && e.target === node.id);
+                        const length = edge && edge.length ? edge.length : defaultSpacing;
+                        positions[node.id] = {
+                            x: positions[prevNode.id].x + length,
+                            y: 100 + b * defaultSpacing
+                        };
+                    }
                 }
             }
         } else if (this.simpleGraph.nodes) {
             // Fallback to old logic if no branches
             const n = this.simpleGraph.nodes.length;
+            const spacingX = defaultSpacing;
+            const spacingY = defaultSpacing;
             if (this.latticeType === 'square' || this.latticeType === 'rectangular') {
                 const cols = Math.ceil(Math.sqrt(n));
                 const rows = Math.ceil(n / cols);
-                const spacingX = 120;
-                const spacingY = 120;
                 for (let i = 0; i < n; ++i) {
                     const row = Math.floor(i / cols);
                     const col = i % cols;
@@ -431,9 +419,9 @@ class GraphVisualization {
         const infoPanel = document.getElementById('info-panel');
         const infoContent = document.getElementById('info-content');
         const edgeData = edge.data();
-        const connectionType = edgeData.connectionType;
-        const linkTypeData = edgeData.linkTypeData;
-        
+        // For simple mode, use type/length from edge data directly
+        let type = edgeData.type || '';
+        let length = edgeData.length !== undefined ? edgeData.length : '';
         infoContent.innerHTML = `
             <div class="info-item">
                 <span class="info-label">Connection ID:</span>
@@ -441,30 +429,17 @@ class GraphVisualization {
             </div>
             <div class="info-item">
                 <span class="info-label">Type:</span>
-                <span class="info-value">${connectionType ? connectionType.name : edgeData.type}</span>
+                <span class="info-value">${type}</span>
             </div>
             <div class="info-item">
                 <span class="info-label">Length:</span>
-                <span class="info-value">${edgeData.length} units</span>
+                <span class="info-value">${length} units</span>
             </div>
             <div class="info-item">
-                <span class="info-label">Latency:</span>
-                <span class="info-value">${edgeData.latency} ms</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Link Type:</span>
-                <span class="info-value">${linkTypeData ? linkTypeData.name : edgeData.linkType}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">From:</span>
-                <span class="info-value">${edgeData.source} → ${edgeData.fromPort}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">To:</span>
-                <span class="info-value">${edgeData.target} → ${edgeData.toPort}</span>
+                <span class="info-label">From/To:</span>
+                <span class="info-value">${edgeData.source} → ${edgeData.target}</span>
             </div>
         `;
-        
         infoPanel.style.display = 'block';
     }
     
