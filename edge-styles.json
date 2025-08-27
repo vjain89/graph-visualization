@@ -1,0 +1,17 @@
+{
+  "smf": {
+    "color": "#3498db",
+    "width": 4,
+    "opacity": 1
+  },
+  "analog": {
+    "color": "#e67e22",
+    "width": 3,
+    "opacity": 0.7
+  },
+  "fiber_cable": {
+    "color": "#2ecc71",
+    "width": 5,
+    "opacity": 0.9
+  }
+}

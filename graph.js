@@ -8,19 +8,66 @@ class GraphVisualization {
         this.simpleGraph = null;
         // Only use simple mode
         this.latticeType = 'square';
+        this.edgeStyles = {};
         this.setupEventListeners();
-        this.loadData().then(() => {
-            this.initializeCytoscape();
-        });
+        this.init();
+    }
+    
+    async init() {
+        await this.loadData();
+        await this.loadEdgeStyles();
+        this.initializeCytoscape();
     }
     
     async loadData() {
         try {
             const simpleGraphResponse = await fetch('graph-input.json');
             const simpleGraphData = await simpleGraphResponse.json();
-            this.simpleGraph = simpleGraphData;
+            // If assemblies exist, extract the first assembly and its components
+            if (simpleGraphData.assemblies && simpleGraphData.assemblies.length > 0) {
+                const assembly = simpleGraphData.assemblies[0];
+                this.assembly = assembly;
+                this.componentDefs = {};
+                if (simpleGraphData.components) {
+                    for (const comp of simpleGraphData.components) {
+                        this.componentDefs[comp.id] = comp;
+                    }
+                }
+            } else if (simpleGraphData.components && simpleGraphData.components.length > 0) {
+                // Fallback: single component mode
+                const component = simpleGraphData.components[0];
+                let nodes = [];
+                if (component.branches) {
+                    for (const branch of component.branches) {
+                        if (branch.nodes) {
+                            nodes = nodes.concat(branch.nodes);
+                        }
+                    }
+                }
+                this.simpleGraph = {
+                    branches: component.branches || [],
+                    nodes: nodes,
+                    edges: component.edges || [],
+                    inputs: component.inputs || [],
+                    outputs: component.outputs || []
+                };
+            } else {
+                this.simpleGraph = simpleGraphData;
+            }
         } catch (error) {
             console.error('Error loading JSON data:', error);
+        }
+    }
+
+    async loadEdgeStyles() {
+        try {
+            const response = await fetch('edge-styles.json');
+            this.edgeStyles = await response.json();
+            return Promise.resolve();
+        } catch (error) {
+            console.error('Error loading edge styles:', error);
+            this.edgeStyles = {};
+            return Promise.resolve();
         }
     }
     
@@ -55,10 +102,13 @@ class GraphVisualization {
         if (this.cy) {
             this.cy.destroy();
         }
-        const elements = this.createSimpleGraphElements();
+        let elements;
+        // Only render the first component (not assembly view)
+        elements = this.createSimpleGraphElements();
+        // Debug: log elements
+        console.log('initializeCytoscape elements:', elements);
         const layoutConfig = {
             name: 'preset',
-            positions: this.getSimpleNodePositions(),
             fit: true,
             padding: 50
         };
@@ -70,17 +120,6 @@ class GraphVisualization {
             wheelSensitivity: 0.3,
             minZoom: 0.1,
             maxZoom: 3
-        });
-        // Highlight negative-x edges in simple mode
-        const positions = this.getSimpleNodePositions();
-        this.cy.edges().forEach(edge => {
-            const data = edge.data();
-            const sx = positions[data.source]?.x;
-            const tx = positions[data.target]?.x;
-            if (sx !== undefined && tx !== undefined && tx < sx) {
-                edge.style('line-color', '#e74c3c'); // red
-                edge.style('target-arrow-color', '#e74c3c');
-            }
         });
         this.setupCytoscapeEvents();
         this.updateZoomText();
@@ -155,6 +194,25 @@ class GraphVisualization {
     createSimpleGraphElements() {
         if (!this.simpleGraph) return [];
         const elements = [];
+        // Component box parameters
+        const boxCenterX = 400;
+        const boxCenterY = 250;
+        const boxWidth = 700;
+        const boxHeight = 400;
+        const boxLeft = boxCenterX - boxWidth / 2;
+        const boxRight = boxCenterX + boxWidth / 2;
+        const inputOffset = 60; // distance from box edge
+        const outputOffset = 60;
+        // Add a compound node for the component box
+        elements.push({
+            group: 'nodes',
+            data: {
+                id: 'component1',
+                label: 'Component 1',
+                isComponent: true
+            },
+            position: { x: boxCenterX, y: boxCenterY },
+        });
         // Flatten nodes from branches
         let flatNodes = [];
         if (this.simpleGraph.branches) {
@@ -166,18 +224,24 @@ class GraphVisualization {
         } else if (this.simpleGraph.nodes) {
             flatNodes = this.simpleGraph.nodes;
         }
+        // Map node id to position for alignment
+        const nodePositions = this.getSimpleNodePositions();
+        // Add internal nodes
         for (const node of flatNodes) {
             elements.push({
                 group: 'nodes',
                 data: {
                     id: node.id,
                     label: node.label || node.id,
+                    parent: 'component1',
                     color: '#4a90e2',
                     width: 40,
                     height: 40
-                }
+                },
+                position: nodePositions[node.id] || undefined
             });
         }
+        // Add all internal edges as before (no per-element style)
         for (const edge of this.simpleGraph.edges) {
             elements.push({
                 group: 'edges',
@@ -185,13 +249,185 @@ class GraphVisualization {
                     id: `${edge.source}-${edge.target}`,
                     source: edge.source,
                     target: edge.target,
-                    color: '#aaa',
-                    lineWidth: 3,
-                    type: edge.type || '', // <-- add type from JSON
-                    length: edge.length !== undefined ? edge.length : '' // <-- add length from JSON
+                    type: edge.type || '',
+                    length: edge.length !== undefined ? edge.length : ''
                 }
             });
         }
+        // Add input nodes and edges (external world to component input)
+        if (this.simpleGraph.inputs) {
+            let inputIdx = 1;
+            for (const input of this.simpleGraph.inputs) {
+                const inputNodeId = `component1_input${inputIdx}`;
+                // Align vertically with the target node
+                const targetPos = nodePositions[input.target] || { x: boxLeft + 80, y: boxCenterY };
+                elements.push({
+                    group: 'nodes',
+                    data: {
+                        id: inputNodeId,
+                        label: 'Input',
+                        isExternal: true
+                    },
+                    position: { x: boxLeft - 200, y: targetPos.y }
+                });
+                elements.push({
+                    group: 'edges',
+                    data: {
+                        id: `${inputNodeId}->${input.target}`,
+                        source: inputNodeId,
+                        target: input.target,
+                        type: 'input',
+                        length: 100
+                    }
+                });
+                inputIdx++;
+            }
+        }
+        // Add output nodes and edges (component output to external world)
+        if (this.simpleGraph.outputs) {
+            let outputIdx = 1;
+            for (const output of this.simpleGraph.outputs) {
+                const outputNodeId = `component1_output${outputIdx}`;
+                // Align vertically with the source node
+                const sourcePos = nodePositions[output.source] || { x: boxRight - 80, y: boxCenterY };
+                elements.push({
+                    group: 'nodes',
+                    data: {
+                        id: outputNodeId,
+                        label: 'Output',
+                        isExternal: true
+                    },
+                    position: { x: boxRight + 200, y: sourcePos.y }
+                });
+                elements.push({
+                    group: 'edges',
+                    data: {
+                        id: `${output.source}->${outputNodeId}`,
+                        source: output.source,
+                        target: outputNodeId,
+                        type: 'output',
+                        length: 100
+                    }
+                });
+                outputIdx++;
+            }
+        }
+        return elements;
+    }
+
+    createAssemblyElements() {
+        if (!this.assembly || !this.componentDefs) return [];
+        const elements = [];
+        const compSpacingY = 300;
+        const compBoxWidth = 300;
+        const compBoxHeight = 200;
+        const compX = 400; // fixed x for all components
+        // Place components in a vertical stack
+        const compPositions = {};
+        for (let i = 0; i < this.assembly.components.length; ++i) {
+            const comp = this.assembly.components[i];
+            const x = compX;
+            const y = 200 + i * compSpacingY;
+            compPositions[comp.instance_id] = { x, y };
+            elements.push({
+                group: 'nodes',
+                data: {
+                    id: comp.instance_id,
+                    label: comp.instance_id,
+                    isComponent: true
+                },
+                position: { x, y }
+            });
+            // Render an 'Assembly Input' for each input of the component instance
+            const compDef = this.componentDefs[comp.type];
+            if (compDef && compDef.inputs) {
+                for (let j = 0; j < compDef.inputs.length; ++j) {
+                    const inputNodeId = `${comp.instance_id}_assembly_input${j+1}`;
+                    elements.push({
+                        group: 'nodes',
+                        data: {
+                            id: inputNodeId,
+                            label: 'Assembly Input',
+                            isExternal: true
+                        },
+                        position: { x: x - compBoxWidth / 2 - 200, y: y + (j * 40) }
+                    });
+                    elements.push({
+                        group: 'edges',
+                        data: {
+                            id: `${inputNodeId}->${comp.instance_id}`,
+                            source: inputNodeId,
+                            target: comp.instance_id,
+                            type: 'assembly_input',
+                            length: 100
+                        },
+                        style: {
+                            'line-color': '#888',
+                            'width': 3,
+                            'opacity': 1,
+                            'line-style': 'dotted'
+                        }
+                    });
+                }
+            }
+            // Render an 'Assembly Output' for each output of the component instance
+            if (compDef && compDef.outputs) {
+                for (let j = 0; j < compDef.outputs.length; ++j) {
+                    const outputNodeId = `${comp.instance_id}_assembly_output${j+1}`;
+                    elements.push({
+                        group: 'nodes',
+                        data: {
+                            id: outputNodeId,
+                            label: 'Assembly Output',
+                            isExternal: true
+                        },
+                        position: { x: x + compBoxWidth / 2 + 200, y: y + (j * 40) }
+                    });
+                    elements.push({
+                        group: 'edges',
+                        data: {
+                            id: `${comp.instance_id}->${outputNodeId}`,
+                            source: comp.instance_id,
+                            target: outputNodeId,
+                            type: 'assembly_output',
+                            length: 100
+                        },
+                        style: {
+                            'line-color': '#888',
+                            'width': 3,
+                            'opacity': 1,
+                            'line-style': 'dotted'
+                        }
+                    });
+                }
+            }
+        }
+        // Draw connections between components ONLY if specified in JSON
+        if (this.assembly.connections) {
+            let connIdx = 1;
+            for (const conn of this.assembly.connections) {
+                const fromComp = conn.from.component;
+                const toComp = conn.to.component;
+                elements.push({
+                    group: 'edges',
+                    data: {
+                        id: `assembly_conn_${connIdx}`,
+                        source: fromComp,
+                        target: toComp,
+                        type: 'assembly_conn',
+                        label: `${conn.from.output}→${conn.to.input}`
+                    },
+                    style: {
+                        'line-color': '#888',
+                        'width': 4,
+                        'opacity': 1,
+                        'line-style': 'dashed'
+                    }
+                });
+                connIdx++;
+            }
+        }
+        // (Assembly-level inputs/outputs from the JSON are ignored for this visual)
         return elements;
     }
     
@@ -313,7 +549,31 @@ class GraphVisualization {
     }
     
     getCytoscapeStyle() {
-        return [
+        // Debug: log edgeStyles
+        console.log('getCytoscapeStyle edgeStyles:', this.edgeStyles);
+        // Use edge-styles.json for edge type styles
+        const edgeTypeStyles = this.edgeStyles || {};
+        const styleArr = [
+            {
+                selector: 'node[isComponent]',
+                style: {
+                    'background-opacity': 0,
+                    'background-color': '#fff',
+                    'border-color': '#bbb',
+                    'border-width': 4,
+                    'shape': 'rectangle',
+                    'width': 700,
+                    'height': 400,
+                    'label': 'data(label)',
+                    'z-index': 0,
+                    'text-valign': 'top',
+                    'text-halign': 'center',
+                    'font-size': '20px',
+                    'font-weight': 'bold',
+                    'color': '#888',
+                    'text-margin-y': 10
+                }
+            },
             {
                 selector: 'node',
                 style: {
@@ -333,6 +593,16 @@ class GraphVisualization {
                     'text-outline-color': '#fff'
                 }
             },
+            // Edge type styles from edge-styles.json
+            ...Object.entries(edgeTypeStyles).map(([type, style]) => ({
+                selector: `edge[type="${type}"]`,
+                style: {
+                    'line-color': style.color || '#aaa',
+                    'width': (typeof style.width === 'number' && !isNaN(style.width)) ? style.width : 3,
+                    'opacity': typeof style.opacity === 'number' && !isNaN(style.opacity) ? style.opacity : 1
+                }
+            })),
+            // Default edge style
             {
                 selector: 'edge',
                 style: {
@@ -340,7 +610,7 @@ class GraphVisualization {
                     'line-color': '#4a90e2',
                     'curve-style': 'bezier',
                     'target-arrow-color': '#4a90e2',
-                    'target-arrow-shape': 'triangle',
+                    'target-arrow-shape': 'none',
                     'arrow-scale': 1.2,
                     'opacity': 0.9
                 }
@@ -357,10 +627,38 @@ class GraphVisualization {
                 style: {
                     'width': 4,
                     'line-color': '#357abd',
-                    'target-arrow-color': '#357abd'
+                    'target-arrow-color': '#357abd',
+                    'target-arrow-shape': 'none'
+                }
+            },
+            {
+                selector: 'node[isExternal]',
+                style: {
+                    'background-color': '#eee',
+                    'border-color': '#bbb',
+                    'border-width': 2,
+                    'shape': 'ellipse',
+                    'width': 40,
+                    'height': 40,
+                    'label': 'data(label)',
+                    'z-index': 1,
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'font-size': '14px',
+                    'color': '#888'
+                }
+            },
+            {
+                selector: '.faded',
+                style: {
+                    'opacity': 0.2,
+                    'background-color': '#ccc',
+                    'line-color': '#ccc',
+                    'color': '#bbb'
                 }
             }
         ];
+        return styleArr;
     }
     
     setupCytoscapeEvents() {
@@ -384,6 +682,26 @@ class GraphVisualization {
         // Zoom events
         this.cy.on('zoom', () => {
             this.updateZoomText();
+            const zoomLevel = this.cy.zoom();
+            // Build a set of internal node IDs (children of component1)
+            const internalNodeIds = new Set(this.cy.nodes('[parent="component1"]').map(n => n.id()));
+            if (zoomLevel < 1.0) {
+                // Fade internal nodes
+                this.cy.nodes('[parent="component1"]').addClass('faded');
+                // Remove faded from all edges first
+                this.cy.edges().removeClass('faded');
+                // Fade only internal edges (both ends inside the component box)
+                this.cy.edges().forEach(edge => {
+                    const srcId = edge.source().id();
+                    const tgtId = edge.target().id();
+                    if (internalNodeIds.has(srcId) && internalNodeIds.has(tgtId)) {
+                        edge.addClass('faded');
+                    }
+                });
+            } else {
+                this.cy.nodes('[parent="component1"]').removeClass('faded');
+                this.cy.edges().removeClass('faded');
+            }
         });
     }
     
@@ -392,7 +710,8 @@ class GraphVisualization {
         const infoContent = document.getElementById('info-content');
         const nodeData = node.data();
         const objectType = nodeData.objectType;
-        
+        const inputs = nodeData.inputs || [];
+        const outputs = nodeData.outputs || [];
         infoContent.innerHTML = `
             <div class="info-item">
                 <span class="info-label">ID:</span>
@@ -404,14 +723,13 @@ class GraphVisualization {
             </div>
             <div class="info-item">
                 <span class="info-label">Inputs:</span>
-                <span class="info-value">${nodeData.inputs.length}</span>
+                <span class="info-value">${inputs.length}</span>
             </div>
             <div class="info-item">
                 <span class="info-label">Outputs:</span>
-                <span class="info-value">${nodeData.outputs.length}</span>
+                <span class="info-value">${outputs.length}</span>
             </div>
         `;
-        
         infoPanel.style.display = 'block';
     }
     

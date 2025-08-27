@@ -1,37 +1,42 @@
 {
-  "branches": [
+  "components": [
     {
-      "id": "branch1",
-      "nodes": [
-        { "id": "A", "label": "Node A" },
-        { "id": "B", "label": "Node B" },
-        { "id": "C", "label": "Node C" },
-        { "id": "D", "label": "Node D" }
+      "id": "component1",
+      "branches": [
+        {
+          "id": "branch1",
+          "nodes": [
+            { "id": "A", "label": "Node A" },
+            { "id": "B", "label": "Node B" },
+            { "id": "C", "label": "Node C" },
+            { "id": "D", "label": "Node D" }
+          ]
+        },
+        {
+          "id": "branch2",
+          "nodes": [
+            { "id": "E", "label": "Node E" },
+            { "id": "F", "label": "Node F" },
+            { "id": "G", "label": "Node G" }
+          ]
+        }
+      ],
+      "edges": [
+        { "source": "A", "target": "B", "length": 100, "type": "smf" },
+        { "source": "B", "target": "C", "length": 100, "type": "smf" },
+        { "source": "C", "target": "D", "length": 250, "type": "smf" },
+        { "source": "C", "target": "E", "length": 100, "type": "smf" },
+        { "source": "E", "target": "F", "length": 300, "type": "analog" },
+        { "source": "F", "target": "G", "length": 200, "type": "analog" },
+        { "source": "G", "target": "D", "length": 100, "type": "fiber_cable" }
+      ],
+      "inputs": [
+        { "id": "input1", "target": "A" }
+      ],
+      "outputs": [
+        { "id": "output1", "source": "D" },
+        { "id": "output2", "source": "G" }
       ]
-    },
-    {
-      "id": "branch2",
-      "nodes": [
-        { "id": "E", "label": "Node E" },
-        { "id": "F", "label": "Node F" },
-        { "id": "G", "label": "Node G" }
-      ]
-    },
-    {
-        "id": "branch3",
-        "nodes": [
-            { "id": "H", "label": "Node H" }
-        ]
     }
-  ],
-  "edges": [
-    { "source": "A", "target": "B" },
-    { "source": "B", "target": "C" },
-    { "source": "C", "target": "D" },
-    { "source": "C", "target": "E" },
-    { "source": "E", "target": "F" },
-    { "source": "F", "target": "G" },
-    { "source": "E", "target": "H" },
-    { "source": "H", "target": "G" }
   ]
 } 
