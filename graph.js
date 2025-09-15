@@ -21,41 +21,25 @@ class GraphVisualization {
     
     async loadData() {
         try {
-            const simpleGraphResponse = await fetch('graph-input.json');
-            const simpleGraphData = await simpleGraphResponse.json();
-            // If assemblies exist, extract the first assembly and its components
-            if (simpleGraphData.assemblies && simpleGraphData.assemblies.length > 0) {
-                const assembly = simpleGraphData.assemblies[0];
-                this.assembly = assembly;
-                this.componentDefs = {};
-                if (simpleGraphData.components) {
-                    for (const comp of simpleGraphData.components) {
-                        this.componentDefs[comp.id] = comp;
-                    }
-                }
-            } else if (simpleGraphData.components && simpleGraphData.components.length > 0) {
-                // Fallback: single component mode
-                const component = simpleGraphData.components[0];
-                let nodes = [];
-                if (component.branches) {
-                    for (const branch of component.branches) {
-                        if (branch.nodes) {
-                            nodes = nodes.concat(branch.nodes);
-                        }
-                    }
-                }
-                this.simpleGraph = {
-                    branches: component.branches || [],
-                    nodes: nodes,
-                    edges: component.edges || [],
-                    inputs: component.inputs || [],
-                    outputs: component.outputs || []
-                };
-            } else {
-                this.simpleGraph = simpleGraphData;
-            }
+            // Load the new hierarchy structure
+            const [componentsResponse, assembliesResponse, boxesResponse] = await Promise.all([
+                fetch('objects/components.json'),
+                fetch('objects/assemblies.json'),
+                fetch('objects/boxes.json')
+            ]);
+            
+            this.components = await componentsResponse.json();
+            this.assemblies = await assembliesResponse.json();
+            this.boxes = await boxesResponse.json();
+            
+            console.log('Loaded hierarchy:', {
+                components: this.components,
+                assemblies: this.assemblies,
+                boxes: this.boxes
+            });
+            
         } catch (error) {
-            console.error('Error loading JSON data:', error);
+            console.error('Error loading hierarchy data:', error);
         }
     }
 
@@ -103,10 +87,8 @@ class GraphVisualization {
             this.cy.destroy();
         }
         let elements;
-        // Only render the first component (not assembly view)
-        elements = this.createSimpleGraphElements();
-        // Debug: log elements
-        console.log('initializeCytoscape elements:', elements);
+        // Use box level visualization
+        elements = this.createBoxLevelElements();
         const layoutConfig = {
             name: 'preset',
             fit: true,
@@ -549,11 +531,68 @@ class GraphVisualization {
     }
     
     getCytoscapeStyle() {
-        // Debug: log edgeStyles
-        console.log('getCytoscapeStyle edgeStyles:', this.edgeStyles);
         // Use edge-styles.json for edge type styles
         const edgeTypeStyles = this.edgeStyles || {};
         const styleArr = [
+            {
+                selector: 'node[isAssembly]',
+                style: {
+                    'background-color': '#e8f4fd',
+                    'border-color': '#4a90e2',
+                    'border-width': 3,
+                    'shape': 'rectangle',
+                    'width': 300,
+                    'height': 200,
+                    'label': 'data(label)',
+                    'color': '#222',
+                    'font-size': '16px',
+                    'font-weight': 'bold',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'text-wrap': 'wrap',
+                    'text-max-width': 280
+                }
+            },
+            {
+                selector: 'node[isPort][isInput]',
+                style: {
+                    'background-color': '#90EE90',
+                    'border-color': '#228B22',
+                    'border-width': 2,
+                    'shape': 'ellipse',
+                    'width': 12,
+                    'height': 12,
+                    'label': 'data(label)',
+                    'color': '#000',
+                    'font-size': '10px',
+                    'font-weight': 'bold',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'text-outline-width': 1,
+                    'text-outline-color': '#fff',
+                    'z-index': 2
+                }
+            },
+            {
+                selector: 'node[isPort][isOutput]',
+                style: {
+                    'background-color': '#FFB6C1',
+                    'border-color': '#DC143C',
+                    'border-width': 2,
+                    'shape': 'ellipse',
+                    'width': 12,
+                    'height': 12,
+                    'label': 'data(label)',
+                    'color': '#000',
+                    'font-size': '10px',
+                    'font-weight': 'bold',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'text-outline-width': 1,
+                    'text-outline-color': '#fff',
+                    'z-index': 2
+                }
+            },
             {
                 selector: 'node[isComponent]',
                 style: {
@@ -599,9 +638,22 @@ class GraphVisualization {
                 style: {
                     'line-color': style.color || '#aaa',
                     'width': (typeof style.width === 'number' && !isNaN(style.width)) ? style.width : 3,
-                    'opacity': typeof style.opacity === 'number' && !isNaN(style.opacity) ? style.opacity : 1
+                    'opacity': (typeof style.opacity === 'number' && !isNaN(style.opacity)) ? style.opacity : 1
                 }
             })),
+            // Connectivity edges
+            {
+                selector: 'edge[label*="→"]',
+                style: {
+                    'line-color': '#ff6b6b',
+                    'width': 2,
+                    'opacity': 0.8,
+                    'curve-style': 'bezier',
+                    'target-arrow-color': '#ff6b6b',
+                    'target-arrow-shape': 'triangle',
+                    'arrow-scale': 1.0
+                }
+            },
             // Default edge style
             {
                 selector: 'edge',
@@ -805,6 +857,297 @@ class GraphVisualization {
                 edge.style('width', scaledWidth);
             });
         }
+    }
+
+    createBoxLevelElements() {
+        if (!this.boxes || !this.boxes.box_1 || !this.assemblies || !this.components) return [];
+        
+        const elements = [];
+        const box = this.boxes.box_1;
+        const assemblies = box.assemblies;
+        const connectivity = box.connectivity;
+        
+        // Position assembly boxes horizontally
+        const boxSpacing = 400;
+        const boxWidth = 300;
+        const boxHeight = 200;
+        const startX = 200;
+        const centerY = 300;
+        
+        // Create assembly boxes with their ports
+        const assemblyPositions = {};
+        let assemblyIndex = 0;
+        
+        for (const [assemblyType, assemblyId] of Object.entries(assemblies)) {
+            const x = startX + assemblyIndex * boxSpacing;
+            const y = centerY;
+            
+            assemblyPositions[assemblyId] = { x, y, type: assemblyType };
+            
+            // Create the assembly box
+            elements.push({
+                group: 'nodes',
+                data: {
+                    id: assemblyId,
+                    label: `${assemblyType}\n(${assemblyId})`,
+                    isAssembly: true,
+                    assemblyType: assemblyType
+                },
+                position: { x, y }
+            });
+            
+            // Calculate and create ports for this assembly
+            const assemblyDef = this.assemblies[assemblyType];
+            if (assemblyDef && assemblyDef.components) {
+                let portIndex = 0;
+                
+                for (const [componentType, count] of Object.entries(assemblyDef.components)) {
+                    const componentDef = this.components[componentType];
+                    if (componentDef) {
+                        // Handle ribbon channels (special case)
+                        if (componentType === 'ribbon' && componentDef.channels) {
+                            for (let i = 0; i < count; i++) {
+                                for (let j = 1; j <= componentDef.channels; j++) {
+                                    const portId = `${assemblyId}.ribbon_${i+1}.${j}`;
+                                    const portX = x + boxWidth/2 + 20;
+                                    const portY = y - boxHeight/2 + 20 + portIndex * 10;
+                                    
+                                    elements.push({
+                                        group: 'nodes',
+                                        data: {
+                                            id: portId,
+                                            label: `${j}`,
+                                            isPort: true,
+                                            isOutput: true,
+                                            assemblyId: assemblyId,
+                                            componentType: componentType,
+                                            componentIndex: i+1,
+                                            portType: `channel_${j}`
+                                        },
+                                        position: { x: portX, y: portY }
+                                    });
+                                    console.log(`Created ribbon port: ${portId}`);
+                                    portIndex++;
+                                }
+                            }
+                        }
+                        // Handle source_branch components
+                        else if (componentType === 'source_branch') {
+                            // Create input ports
+                            if (componentDef.inputs) {
+                                for (let i = 0; i < count; i++) {
+                                    for (let j = 0; j < componentDef.inputs.length; j++) {
+                                        const portId = `${assemblyId}.component_${i+1}.inputs.${componentDef.inputs[j]}`;
+                                        const portX = x - boxWidth/2 - 20;
+                                        const portY = y - boxHeight/2 + 20 + portIndex * 15;
+                                        
+                                        elements.push({
+                                            group: 'nodes',
+                                            data: {
+                                                id: portId,
+                                                label: componentDef.inputs[j],
+                                                isPort: true,
+                                                isInput: true,
+                                                assemblyId: assemblyId,
+                                                componentType: componentType,
+                                                componentIndex: i+1,
+                                                portType: componentDef.inputs[j]
+                                            },
+                                            position: { x: portX, y: portY }
+                                        });
+                                        console.log(`Created input port: ${portId}`);
+                                        portIndex++;
+                                    }
+                                }
+                            }
+                            
+                            // Create output ports
+                            if (componentDef.outputs) {
+                                for (let i = 0; i < count; i++) {
+                                    for (let j = 0; j < componentDef.outputs.length; j++) {
+                                        const portId = `${assemblyId}.component_${i+1}.outputs.${componentDef.outputs[j]}`;
+                                        const portX = x + boxWidth/2 + 20;
+                                        const portY = y - boxHeight/2 + 20 + portIndex * 15;
+                                        
+                                        elements.push({
+                                            group: 'nodes',
+                                            data: {
+                                                id: portId,
+                                                label: componentDef.outputs[j],
+                                                isPort: true,
+                                                isOutput: true,
+                                                assemblyId: assemblyId,
+                                                componentType: componentType,
+                                                componentIndex: i+1,
+                                                portType: componentDef.outputs[j]
+                                            },
+                                            position: { x: portX, y: portY }
+                                        });
+                                        console.log(`Created output port: ${portId}`);
+                                        portIndex++;
+                                    }
+                                }
+                            }
+                        }
+                        // Handle digitizer components
+                        else if (componentType === 'digitizer') {
+                            for (let i = 0; i < count; i++) {
+                                const portId = `${assemblyId}.digitizer_${i+1}`;
+                                const portX = x - boxWidth/2 - 20;
+                                const portY = y - boxHeight/2 + 20 + portIndex * 15;
+                                
+                                elements.push({
+                                    group: 'nodes',
+                                    data: {
+                                        id: portId,
+                                        label: `digitizer_${i+1}`,
+                                        isPort: true,
+                                        isInput: true,
+                                        assemblyId: assemblyId,
+                                        componentType: componentType,
+                                        componentIndex: i+1,
+                                        portType: 'digitizer'
+                                    },
+                                    position: { x: portX, y: portY }
+                                });
+                                console.log(`Created digitizer port: ${portId}`);
+                                portIndex++;
+                            }
+                        }
+                        // Handle other component types with inputs/outputs
+                        else {
+                            // Create input ports
+                            if (componentDef.inputs) {
+                                const inputs = Array.isArray(componentDef.inputs) ? componentDef.inputs : Array(componentDef.inputs).fill('input');
+                                for (let i = 0; i < count; i++) {
+                                    for (let j = 0; j < inputs.length; j++) {
+                                        const portId = `${assemblyId}.${componentType}_${i+1}.inputs.${inputs[j]}`;
+                                        const portX = x - boxWidth/2 - 20;
+                                        const portY = y - boxHeight/2 + 20 + portIndex * 15;
+                                        
+                                        elements.push({
+                                            group: 'nodes',
+                                            data: {
+                                                id: portId,
+                                                label: inputs[j],
+                                                isPort: true,
+                                                isInput: true,
+                                                assemblyId: assemblyId,
+                                                componentType: componentType,
+                                                componentIndex: i+1,
+                                                portType: inputs[j]
+                                            },
+                                            position: { x: portX, y: portY }
+                                        });
+                                        console.log(`Created generic input port: ${portId}`);
+                                        portIndex++;
+                                    }
+                                }
+                            }
+                            
+                            // Create output ports
+                            if (componentDef.outputs) {
+                                const outputs = Array.isArray(componentDef.outputs) ? componentDef.outputs : Array(componentDef.outputs).fill('output');
+                                for (let i = 0; i < count; i++) {
+                                    for (let j = 0; j < outputs.length; j++) {
+                                        const portId = `${assemblyId}.${componentType}_${i+1}.outputs.${outputs[j]}`;
+                                        const portX = x + boxWidth/2 + 20;
+                                        const portY = y - boxHeight/2 + 20 + portIndex * 15;
+                                        
+                                        elements.push({
+                                            group: 'nodes',
+                                            data: {
+                                                id: portId,
+                                                label: outputs[j],
+                                                isPort: true,
+                                                isOutput: true,
+                                                assemblyId: assemblyId,
+                                                componentType: componentType,
+                                                componentIndex: i+1,
+                                                portType: outputs[j]
+                                            },
+                                            position: { x: portX, y: portY }
+                                        });
+                                        console.log(`Created generic output port: ${portId}`);
+                                        portIndex++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            assemblyIndex++;
+        }
+        
+        // Create connectivity edges only between connected ports
+        if (connectivity) {
+            connectivity.forEach((conn, index) => {
+                // Find the source and target port nodes
+                const sourcePort = this.findPortNode(conn.from);
+                const targetPort = this.findPortNode(conn.to);
+                
+                console.log(`Connection ${index}: ${conn.from} → ${conn.to}`);
+                console.log(`  Source port ID: ${sourcePort}`);
+                console.log(`  Target port ID: ${targetPort}`);
+                
+                if (sourcePort && targetPort) {
+                    const edgeElement = {
+                        group: 'edges',
+                        data: {
+                            id: `conn_${index}`,
+                            source: sourcePort,
+                            target: targetPort,
+                            label: `${conn.from} → ${conn.to}`,
+                            connection: conn
+                        }
+                    };
+                    console.log(`Creating edge: ${edgeElement.data.id} from ${edgeElement.data.source} to ${edgeElement.data.target}`);
+                    elements.push(edgeElement);
+                } else {
+                    console.error(`Failed to map ports for connection ${index}: ${conn.from} → ${conn.to}`);
+                }
+            });
+        }
+        
+        console.log(`Total elements created: ${elements.length}`);
+        console.log(`Nodes: ${elements.filter(e => e.group === 'nodes').length}`);
+        console.log(`Edges: ${elements.filter(e => e.group === 'edges').length}`);
+        
+        return elements;
+    }
+    
+    findPortNode(portPath) {
+        // Parse port path like "flange0.ribbon_1.1" or "source0.component_1.inputs.pump_in"
+        const parts = portPath.split('.');
+        if (parts.length >= 3) {
+            const assemblyId = parts[0];
+            const componentPart = parts[1];
+            const portPart = parts[2];
+            
+            // Handle ribbon channels (flange0.ribbon_1.1)
+            if (componentPart.startsWith('ribbon_')) {
+                const ribbonNum = componentPart.split('_')[1];
+                const channelNum = portPart;
+                return `${assemblyId}.ribbon_${ribbonNum}.${channelNum}`;
+            }
+            
+            // Handle component inputs/outputs (source0.component_1.inputs.pump_in)
+            if (componentPart.startsWith('component_') && parts.length >= 4) {
+                const componentIndex = componentPart.split('_')[1];
+                const ioType = parts[2]; // inputs or outputs
+                const portName = parts[3];
+                return `${assemblyId}.component_${componentIndex}.${ioType}.${portName}`;
+            }
+            
+            // Handle digitizer (controller0.digitizer_1)
+            if (componentPart.startsWith('digitizer_')) {
+                const digitizerNum = componentPart.split('_')[1];
+                return `${assemblyId}.digitizer_${digitizerNum}`;
+            }
+        }
+        return null;
     }
 }
 

@@ -1,0 +1,12 @@
+{
+  "source_branch": {
+    "inputs": ["pump_in"],
+    "outputs": ["pump_out", "photon_out", "detector_out"]
+  },
+  "ribbon": {
+    "channels": 12
+  },
+  "digitizer": {
+    "inputs": 1
+  }
+}

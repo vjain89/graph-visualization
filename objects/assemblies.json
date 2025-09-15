@@ -1,0 +1,11 @@
+{
+  "source": {
+    "components": {"source_branch": 12}
+  },
+  "flange": {
+    "components": {"ribbon": 4}
+  },
+  "controller": {
+    "components": {"digitizer": 2}
+  }
+}
