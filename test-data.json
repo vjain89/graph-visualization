@@ -1,0 +1,44 @@
+{
+  "assemblies": {
+    "source": {
+      "components": {"source_branch": 12}
+    },
+    "flange": {
+      "components": {"ribbon": 4}
+    },
+    "controller": {
+      "components": {"digitizer": 2}
+    }
+  },
+  "components": {
+    "source_branch": {
+      "inputs": ["pump_in"],
+      "outputs": ["pump_out", "photon_out", "detector_out"]
+    },
+    "ribbon": {
+      "channels": 12
+    },
+    "digitizer": {
+      "inputs": 1
+    }
+  },
+  "boxes": {
+    "box_1": {
+      "assemblies": {
+        "flange": "flange0", 
+        "source": "source0", 
+        "controller": "controller0"
+      },
+      "connectivity": [
+        {"from": "flange0.ribbon_1.1", "to": "source0.component_1.inputs.pump_in"},
+        {"from": "flange0.ribbon_1.2", "to": "source0.component_2.inputs.pump_in"},
+        {"from": "flange0.ribbon_2.1", "to": "source0.component_1.outputs.pump_out"},
+        {"from": "flange0.ribbon_2.2", "to": "source0.component_2.outputs.pump_out"},
+        {"from": "flange0.ribbon_3.1", "to": "source0.component_1.outputs.photon_out"},
+        {"from": "flange0.ribbon_3.2", "to": "source0.component_2.outputs.photon_out"},
+        {"from": "source0.component_1.outputs.detector_out", "to": "controller0.digitizer_1"},
+        {"from": "source0.component_2.outputs.detector_out", "to": "controller0.digitizer_2"}
+      ]
+    }
+  }
+}
